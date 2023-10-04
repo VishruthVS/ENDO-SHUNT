@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-#
-# train an SSD detection model on Pascal VOC or Open Images datasets
-# https://github.com/dusty-nv/jetson-inference/blob/master/docs/pytorch-ssd.md
-#
+
 import argparse
 import datetime
 import itertools
@@ -35,7 +31,7 @@ DEFAULT_PRETRAINED_MODEL = 'models/mobilenet-v1-ssd-mp-0_675.pth'
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With PyTorch')
 
-# Params for datasets
+
 parser.add_argument("--dataset-type", default="open_images", type=str,
                     help='Specify dataset type. Currently supports voc and open_images.')
 parser.add_argument('--datasets', '--data', nargs='+',
@@ -43,7 +39,7 @@ parser.add_argument('--datasets', '--data', nargs='+',
 parser.add_argument('--balance-data', action='store_true',
                     help="Balance training data by down-sampling more frequent labels.")
 
-# Params for network
+
 parser.add_argument('--net', default="mb1-ssd",
                     help="The network architecture, it can be mb1-ssd, mb1-ssd-lite, mb2-ssd-lite or vgg16-ssd.")
 parser.add_argument('--resolution', type=int, default=300,
@@ -55,14 +51,14 @@ parser.add_argument('--freeze-net', action='store_true',
 parser.add_argument('--mb2-width-mult', default=1.0, type=float,
                     help='Width Multiplifier for MobilenetV2')
 
-# Params for loading pretrained basenet or checkpoints.
+
 parser.add_argument('--base-net', help='Pretrained base model')
 parser.add_argument('--pretrained-ssd', default=DEFAULT_PRETRAINED_MODEL,
                     type=str, help='Pre-trained base model')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
 
-# Params for SGD
+
 parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
                     help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float,
@@ -76,19 +72,19 @@ parser.add_argument('--base-net-lr', default=0.001, type=float,
 parser.add_argument('--extra-layers-lr', default=None, type=float,
                     help='initial learning rate for the layers not in base net and prediction heads.')
 
-# Scheduler
+
 parser.add_argument('--scheduler', default="cosine", type=str,
                     help="Scheduler for SGD. It can one of multi-step and cosine")
 
-# Params for Multi-step Scheduler
+
 parser.add_argument('--milestones', default="80,100", type=str,
                     help="milestones for MultiStepLR")
 
-# Params for Cosine Annealing
+
 parser.add_argument('--t-max', default=100, type=float,
                     help='T_max value for Cosine Annealing Scheduler.')
 
-# Train params
+
 parser.add_argument('--batch-size', default=4, type=int,
                     help='Batch size for training')
 parser.add_argument('--num-epochs', '--epochs', default=30, type=int,
@@ -224,14 +220,12 @@ if _name_ == '_main_':
 
     logging.info(args)
 
-    # make sure that the checkpoint output dir exists
     if args.checkpoint_folder:
         args.checkpoint_folder = os.path.expanduser(args.checkpoint_folder)
 
         if not os.path.exists(args.checkpoint_folder):
             os.mkdir(args.checkpoint_folder)
 
-    # select the network architecture and config
     if args.net == 'vgg16-ssd':
         create_net = create_vgg_ssd
         config = vgg_ssd_config
@@ -254,7 +248,6 @@ if _name_ == '_main_':
         parser.print_help(sys.stderr)
         sys.exit(1)
 
-    # create data transforms for train/test/val
     train_transform = TrainAugmentation(
         config.image_size, config.image_mean, config.image_std)
     target_transform = MatchPrior(config.priors, config.center_variance,
@@ -263,7 +256,6 @@ if _name_ == '_main_':
     test_transform = TestTransform(
         config.image_size, config.image_mean, config.image_std)
 
-    # load datasets (could be multiple)
     logging.info("Prepare training datasets.")
     datasets = []
     for dataset_path in args.datasets:
@@ -287,7 +279,6 @@ if _name_ == '_main_':
                 f"Dataset type {args.dataset_type} is not supported.")
         datasets.append(dataset)
 
-    # create training dataset
     logging.info(f"Stored labels into file {label_file}.")
     train_dataset = ConcatDataset(datasets)
     logging.info("Train dataset size: {}".format(len(train_dataset)))
@@ -295,7 +286,6 @@ if _name_ == '_main_':
                               num_workers=args.num_workers,
                               shuffle=True)
 
-    # create validation dataset
     logging.info("Prepare Validation datasets.")
     if args.dataset_type == "voc":
         val_dataset = VOCDataset(dataset_path, transform=test_transform,
@@ -311,13 +301,11 @@ if _name_ == '_main_':
                             num_workers=args.num_workers,
                             shuffle=False)
 
-    # create the network
     logging.info("Build network.")
     net = create_net(num_classes)
     min_loss = -10000.0
     last_epoch = -1
 
-    # prepare eval dataset (for mAP computation)
     if args.validation_mean_ap:
         if args.dataset_type == "voc":
             eval_dataset = VOCDataset(dataset_path, is_test=True)
@@ -326,7 +314,6 @@ if _name_ == '_main_':
         eval = MeanAPEvaluator(eval_dataset, net, arch=args.net, eval_dir=os.path.join(
             args.checkpoint_folder, 'eval_results'))
 
-    # freeze certain layers (if requested)
     base_net_lr = args.base_net_lr if args.base_net_lr is not None else args.lr
     extra_layers_lr = args.extra_layers_lr if args.extra_layers_lr is not None else args.lr
 
@@ -365,7 +352,6 @@ if _name_ == '_main_':
             )}
         ]
 
-    # load a previous model checkpoint (if requested)
     timer.start("Load Model")
 
     if args.resume:
@@ -386,10 +372,8 @@ if _name_ == '_main_':
     logging.info(
         f'Took {timer.end("Load Model"):.2f} seconds to load the model.')
 
-    # move the model to GPU
     net.to(DEVICE)
 
-    # define loss function and optimizer
     criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
                              center_variance=0.1, size_variance=0.2, device=DEVICE)
 
@@ -399,7 +383,6 @@ if _name_ == '_main_':
     logging.info(f"Learning rate: {args.lr}, Base net learning rate: {base_net_lr}, "
                  + f"Extra Layers learning rate: {extra_layers_lr}.")
 
-    # set learning rate policy
     if args.scheduler == 'multi-step':
         logging.info("Uses MultiStepLR scheduler.")
         milestones = [int(v.strip()) for v in args.milestones.split(",")]
@@ -414,7 +397,6 @@ if _name_ == '_main_':
         parser.print_help(sys.stderr)
         sys.exit(1)
 
-    # train for the desired number of epochs
     logging.info(f"Start training from epoch {last_epoch + 1}.")
 
     for epoch in range(last_epoch + 1, args.num_epochs):

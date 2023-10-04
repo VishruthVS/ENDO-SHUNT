@@ -1,11 +1,5 @@
-#!/usr/bin/env python3
-#
-# Note -- this training script is tweaked from the original at:
-#           https://github.com/pytorch/examples/tree/master/imagenet
-#
-# For a step-by-step guide to transfer learning with PyTorch, see:
-#           https://pytorch.org/tutorials/beginner/finetuning_torchvision_models_tutorial.html
-#
+
+
 import argparse
 import datetime
 import os
@@ -29,13 +23,11 @@ from reshape import reshape_model
 from torch.utils.tensorboard import SummaryWriter
 from voc import VOCDataset
 
-# get the available network architectures
 model_names = sorted(name for name in models._dict_
                      if name.islower() and not name.startswith("__")
                      and callable(models._dict_[name]))
 
 
-# parse command-line arguments
 parser = argparse.ArgumentParser(
     description='PyTorch Image Classifier Training')
 
@@ -94,7 +86,7 @@ tensorboard = SummaryWriter(log_dir=os.path.join(
 print(
     f"To start tensorboard run:  tensorboard --log-dir={os.path.join(args.model_dir, 'tensorboard')}")
 
-# variable for storing the best model accuracy so far
+
 best_accuracy = 0
 
 
@@ -118,7 +110,6 @@ def main(args):
         print(
             f"=> using GPU {args.gpu} ({torch.cuda.get_device_name(args.gpu)})")
 
-    # setup data transformations
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -136,7 +127,6 @@ def main(args):
         normalize,
     ])
 
-    # load the dataset
     if args.dataset_type == 'folder':
         train_dataset = datasets.ImageFolder(
             os.path.join(args.data, 'train'), train_transforms)
@@ -164,7 +154,6 @@ def main(args):
         val_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-    # create or load the model if using pre-trained (the default)
     if args.pretrained:
         print(f"=> using pre-trained model '{args.arch}'")
         model = models._dict_[args.arch](pretrained=True)
@@ -172,10 +161,8 @@ def main(args):
         print(f"=> creating model '{args.arch}'")
         model = models._dict_[args.arch]()
 
-    # reshape the model for the number of classes in the dataset
     model = reshape_model(model, args.arch, len(train_dataset.classes))
 
-    # define loss function (criterion) and optimizer
     if args.multi_label:
         criterion = nn.BCEWithLogitsLoss()
     else:
@@ -185,13 +172,11 @@ def main(args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # transfer the model to the GPU that it should be run on
     if args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         criterion = criterion.cuda(args.gpu)
 
-    # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
             print(f"=> loading checkpoint '{args.resume}'")
@@ -199,7 +184,7 @@ def main(args):
             args.start_epoch = checkpoint['epoch'] + 1
             best_accuracy = checkpoint['best_accuracy']
             if args.gpu is not None:
-                # best_accuracy may be from a checkpoint from a different GPU
+
                 best_accuracy = best_accuracy.to(args.gpu)
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
@@ -210,24 +195,19 @@ def main(args):
 
     cudnn.benchmark = True
 
-    # if in evaluation mode, only run validation
     if args.evaluate:
         validate(val_loader, model, criterion, 0)
         return
 
-    # train for the specified number of epochs
     for epoch in range(args.start_epoch, args.epochs):
-        # decay the learning rate
+
         adjust_learning_rate(optimizer, epoch)
 
-        # train for one epoch
         train_loss, train_acc = train(
             train_loader, model, criterion, optimizer, epoch)
 
-        # evaluate on validation set
         val_loss, val_acc = validate(val_loader, model, criterion, epoch)
 
-        # remember best acc@1 and save checkpoint
         is_best = val_acc > best_accuracy
         best_accuracy = max(val_acc, best_accuracy)
 
@@ -265,36 +245,29 @@ def train(train_loader, model, criterion, optimizer, epoch):
         [batch_time, data_time, losses, acc],
         prefix=f"Epoch: [{epoch}]")
 
-    # switch to train mode
     model.train()
 
-    # get the start time
     epoch_start = time.time()
     end = epoch_start
 
-    # train over each image batch from the dataset
     for i, (images, target) in enumerate(train_loader):
-        # measure data loading time
+
         data_time.update(time.time() - end)
 
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
 
-        # compute output
         output = model(images)
         loss = criterion(output, target)
 
-        # record loss and measure accuracy
         losses.update(loss.item(), images.size(0))
         acc.update(accuracy(output, target), images.size(0))
 
-        # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
@@ -323,7 +296,6 @@ def validate(val_loader, model, criterion, epoch):
         [batch_time, losses, acc],
         prefix='Val:   ')
 
-    # switch to evaluate mode
     model.eval()
 
     with torch.no_grad():
@@ -333,15 +305,12 @@ def validate(val_loader, model, criterion, epoch):
                 images = images.cuda(args.gpu, non_blocking=True)
                 target = target.cuda(args.gpu, non_blocking=True)
 
-            # compute output
             output = model(images)
             loss = criterion(output, target)
 
-            # record loss and measure accuracy
             losses.update(loss.item(), images.size(0))
             acc.update(accuracy(output, target), images.size(0))
 
-            # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
 
@@ -368,17 +337,14 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar', best_filename
         best_filename = os.path.join(model_dir, best_filename)
         labels_filename = os.path.join(model_dir, labels_filename)
 
-    # save the checkpoint
     torch.save(state, filename)
 
-    # earmark the best checkpoint
     if is_best:
         shutil.copyfile(filename, best_filename)
         print(f"saved best model to:  {best_filename}")
     else:
         print(f"saved checkpoint to:  {filename}")
 
-    # save labels.txt on the first epoch
     if state['epoch'] == 0:
         with open(labels_filename, 'w') as file:
             for label in state['classes']:
